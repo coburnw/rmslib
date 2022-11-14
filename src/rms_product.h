@@ -6,7 +6,6 @@
 
 #include <stdint.h>
 
-#include "EwmaT.h"
 #include "rms_scalar.h"
 #include "rms_callback.h"
 
@@ -18,42 +17,35 @@ public:
   static void callback_wrapper(void*, int);
   void callback_update(int);
   
-  //void update(int);
   bool process();
   bool process(bool);
   void process_epoch();
-  
   bool cycle_complete();
-  float voltage();
-  float amperage();
-  float apparent_power();
-  float real_power();
-  float frequency();
-  float power_factor();
-  float phase_angle();
+  
+  int32_t apparent_product();
+  int32_t real_product();
+  int16_t product_factor();
+  int16_t phase_angle();
+
+  long period_us();
   int samples_per_cycle();
 
-  int raw_voltage();
-  int raw_amperage();
-  int32_t raw_product();
-  
+  // instantaneous product sample
+  int32_t sample();
+
+protected:
+  RmsScalar* scalar_a;
+  RmsScalar* scalar_b;
+
 private:
-  RmsScalar* v_in;
-  RmsScalar* i_in;
   RmsCallback* callback;
 
-  // https://github.com/jonnieZG/EWMA
-  EwmaT <int64_t>* real_power_filter;
-  float real_power_slope;
-
-  int64_t real_power_acc;
-  int real_power_acc_count;
-  bool real_power_reset_flag;
-
-  // debug register
-  int full_cycle_sample_count;
-  int32_t raw_power_product;
-  int64_t real_power_acc_debug; //debug snapshot
+  int64_t real_product_acc;
+  int real_product_acc_count;
+  int32_t real_product_value;
+  int32_t sample_product_value;
+  bool real_product_reset_flag;
 };
+
 
 #endif

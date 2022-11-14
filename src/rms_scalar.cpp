@@ -1,70 +1,18 @@
-#include "rms_scalar.h"
-
 // GNU Affero General Public License v3.0
 // Copyright (c) 2022 Coburn Wightman
 
-Scale::Scale(){
-  scale_slope = 1.0;
-  scale_offset = 0.0;
-}
+#include "rms_scalar.h"
 
-Scale::Scale(float slope, float offset){
-  scale_slope = slope;
-  scale_offset = offset;
-}
-
-float Scale::slope(){
-  return scale_slope;
-}
-
-float Scale::offset(){
-  return scale_offset;
-}
-
-float Scale::to_eng(float value){
-  float val = value * scale_slope + scale_offset;
-  return val;
-}
-
-float Scale::from_eng(float value){
-  return (value - scale_offset) / scale_slope;
-}
-
-// **** Input ****
-Input::Input(float slope, float offset)
+RmsScalar::RmsScalar()
 {
-  input_scale = Scale(slope, offset);
-}
-
-bool Input::update(int sample){
-  _sample_value = sample;
-  return false;
-}
-
-int Input::sample_value(){
-  return _sample_value;
-}
-
-float Input::value(){
-  return input_scale.to_eng(sample_value());  
-}
-
-// **** RmsScalar ****
-RmsScalar::RmsScalar(float slope, float offset, const char* scalar_units):
-  Input(slope, offset)
-{
-  units = scalar_units;
-
   callback = nullptr;
   
   freq_prev_val = 0;
   peak_max_val = 0;
   peak_min_val = 0;
-  rms_acc = 0;
-  rms_sample_count = 0;
+  mean_squared_acc = 0;
+  mean_squared_acc_count = 0;
 
-  rms_mean_filter = new EwmaT<int64_t>{3, 10};
-  
   ac_cycle_start_us = 0;
   ac_cycle_stop_us = 0;
   ac_samples_per_cycle = 0;
@@ -88,10 +36,9 @@ bool RmsScalar::process(){
 }
 
 void RmsScalar::process_zero_crossing(){
-  long rms_mean = ac_rms_acc / ac_rms_sample_count;
-  rms_mean_filter->filter(rms_mean);
+  ac_mean_squared = ac_mean_squared_acc / ac_mean_squared_acc_count;
 
-  ac_samples_per_cycle = ac_rms_sample_count;
+  ac_samples_per_cycle = ac_mean_squared_acc_count;
   ac_cycle_complete = false;
   
   return;
@@ -103,18 +50,18 @@ bool RmsScalar::cycle_complete(){
 
 // isr processing
 bool RmsScalar::update(int sample, unsigned long timestamp_us){
-  Input::update(sample);
+  sample_value = sample;
     
-  bool cycle_complete = update_frequency(sample_value(), timestamp_us);
-  update_peak(sample_value(), cycle_complete);
-  update_rms(sample_value(), cycle_complete);
+  bool cycle_complete = update_frequency(sample_value, timestamp_us);
+  update_peak(sample_value, cycle_complete);
+  update_rms(sample_value, cycle_complete);
 
   if (cycle_complete){
     ac_cycle_complete = true;
   }
 
   if (callback){
-    callback->update(sample_value());
+    callback->update(sample_value);
   }
   
   return cycle_complete;
@@ -161,43 +108,41 @@ void RmsScalar::update_peak(int value, bool cycle_complete){
 
 void RmsScalar::update_rms(int value, bool cycle_complete){
   if (cycle_complete){
-    ac_rms_acc = rms_acc;
-    ac_rms_sample_count = rms_sample_count;
-    ac_samples_per_cycle = rms_sample_count;
+    ac_mean_squared_acc = mean_squared_acc;
+    ac_mean_squared_acc_count = mean_squared_acc_count;
+    ac_samples_per_cycle = mean_squared_acc_count;
 
-    rms_acc = 0;
-    rms_sample_count = 0;
+    mean_squared_acc = 0;
+    mean_squared_acc_count = 0;
   }
 
-  rms_acc += long(value) * value;
-  ++rms_sample_count;
+  mean_squared_acc += long(value) * value;
+  ++mean_squared_acc_count;
 
   return;
 }
 
-long RmsScalar::mean_squared(){
-  long ms = rms_mean_filter->output();
-  return ms;
+int RmsScalar::sample(){
+  return sample_value;
 }
 
-float RmsScalar::rms(){
-  float rms_raw = sqrt(mean_squared());
-  return input_scale.to_eng(rms_raw);
+int RmsScalar::rms(){
+  return sqrt(ac_mean_squared);
 }
 
-float RmsScalar::peak(){
+int RmsScalar::peak(){
   int pp = ac_pos_peak - ac_neg_peak;
-  return input_scale.to_eng(pp/2);
+  return (pp / 2);
 }
 
 // return start of cycle in microseconds
-float RmsScalar::zero_crossing(){
+long RmsScalar::zero_crossing(){
   return ac_cycle_start_us;
 }
 
-// return period in seconds
-float RmsScalar::period(){
-  return (ac_cycle_stop_us - ac_cycle_start_us)/1e6;
+// return period in microseconds
+long RmsScalar::period(){
+  return (ac_cycle_stop_us - ac_cycle_start_us);
 }
 
 int RmsScalar::samples_per_cycle(void){

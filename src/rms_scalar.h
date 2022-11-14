@@ -7,63 +7,29 @@
 #include <stdint.h>
 #include <math.h>
 
-#include "EwmaT.h"
 #include "rms_callback.h"
-
-class Scale{
+ 
+class RmsScalar{
 public:
-  Scale();
-  Scale(float, float);
+  RmsScalar();
   
-  float to_eng(float);
-  float from_eng(float);
-  float slope();
-  float offset();
-  
-private:
-  float scale_slope;
-  float scale_offset;
-};
-
-class Input{
-public:
-  Input(float=1.0, float=0.0);
-  bool update(int);     // isr action
-  void process();       // background processing
-  int sample_value();
-  float value();
-
-  Scale input_scale;
-
-protected:
-  int _sample_value;
-  int debug_reg;
-};
-  
-class RmsScalar: public Input{
-public:
-  RmsScalar(float=1.0, float=0.0, const char* scalar_units="");
-
   void register_callback(RmsCallback*);
 
   bool update(int, unsigned long=0);
   bool process();
-  //bool process(bool);
+
+  int sample();
+  int rms();
+  int peak();
+  long period();
+  long zero_crossing();
   bool cycle_complete();
-
-  float rms();
-  float peak();
-  float period();
-  float zero_crossing();
+  
   int samples_per_cycle();
-
-  const char* units;
 
 protected:
 private:
   RmsCallback* callback;
-  
-  long mean_squared();
   
   inline bool update_frequency(int, unsigned long);
   inline void update_peak(int, bool);
@@ -71,29 +37,34 @@ private:
   inline void update_end_of_cycle(int);
   void process_zero_crossing();
 
-  EwmaT<int64_t>* rms_mean_filter;
-
   // working variables
-  int freq_prev_val;
+  int sample_value;
   int peak_max_val;
   int peak_min_val;
 
-  int rms_sample_count;
-  long long rms_acc;
+  // active accumulator
+  int mean_squared_acc_count;
+  long long mean_squared_acc;
+
+  // holding registers for post processing
+  int ac_mean_squared_acc_count;
+  long long ac_mean_squared_acc;
+  long long ac_mean_squared;
+
+  // cycle complete detection
+  int freq_prev_val;
   bool cycle_complete_armed;
+
+  // state variables
   bool ac_cycle_complete;
-  
-  int ac_rms_sample_count;
   int ac_samples_per_cycle;
-  long long ac_rms_acc;
   
-  // finished product for post processing  
+  // finished product ready for client 
   unsigned long ac_cycle_start_us;
   unsigned long ac_cycle_stop_us;
   int ac_pos_peak;
   int ac_neg_peak;
   
-  //int dbg_pin;
 };
 
 #endif

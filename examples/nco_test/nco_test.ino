@@ -4,6 +4,7 @@
 // Copyright (c) 2022 Coburn Wightman
 
 #include <rmslib.h>
+#include "rms_power.h"
 #include "nco.h"
 
 // for a triangle wave, the expected Vpk/Vrms result is 0.577
@@ -29,12 +30,12 @@ SineWave wave{ SineWave{4, adc_max_count} };
 bool ref_soc;
 
 //Scale v_scale{ Scale{v_fs/adc_max_count,0} };
-RmsScalar v_ref{ RmsScalar{v_fs/adc_max_count, 0.0} };
+RmsScalar v_ref{ RmsScalar{} };
 
 //Scale i_scale{ Scale{i_fs/adc_max_count,0} };
-RmsScalar amps{ RmsScalar{i_fs/adc_max_count,0.0} };
+RmsScalar amps{ RmsScalar{} };
 
-RmsProduct zone{ RmsProduct{&v_ref, &amps} };
+RmsPower power{ RmsPower{&v_ref, &amps} };
 float phase_degrees = 0.0;
 float phase_radians = phase_degrees/360.0 * 2 * M_PI;
 
@@ -49,36 +50,36 @@ void setup() {
 
 void loop() {
   bool soc = wave.update();
-  int v_raw = 120.0*1.414/v_fs * wave.value(0);  
-  int i_raw = 2.0*1.414/i_fs * wave.value(phase_radians);
+  int v_raw = 1200 * 1.414 * wave.value(0);  
+  int i_raw =  20 * 1.414 * wave.value(phase_radians);
   
   ref_soc = v_ref.update(v_raw);
   v_ref.process();
 
   amps.update(i_raw);
-  zone.process(ref_soc);
+  power.process(ref_soc);
 
-  Serial.print(zone.raw_voltage());
-  Serial.print(", ");
-  Serial.print(zone.raw_amperage());
-  Serial.print(", ");
-  Serial.print(zone.raw_product());
+  //Serial.print(power.raw_voltage());
+  //Serial.print(", ");
+  //Serial.print(power.raw_amperage());
+  //Serial.print(", ");
+  //Serial.print(power.raw_power());
 
   if (soc){
     Serial.print(" : ");
     Serial.print(phase_degrees);
     Serial.print("*, ");
-    Serial.print(zone.voltage());
+    Serial.print(power.voltage());
     Serial.print("v, ");
-    Serial.print(zone.amperage());
+    Serial.print(power.amperage());
     Serial.print("a, ");
-    Serial.print(zone.real_power());
+    Serial.print(power.real_power());
     Serial.print("pr, ");
-    Serial.print(zone.apparent_power());
+    Serial.print(power.apparent_power());
     Serial.print("pa, ");
-    Serial.print(zone.power_factor());
+    Serial.print(power.power_factor());
   }
-  Serial.print("\n");
+  //Serial.print("\n");
   
   delay(10);
   
